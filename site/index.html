@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="robots" content="noindex, nofollow" />
+<meta name="description" content="מערכת ניהול חניכים, הורים, נוכחות והודעות — מכינת נהריה" />
+<meta name="theme-color" content="#ffffff" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="מכינת נהריה" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<title>מכינת נהריה — ניהול</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="icons/icon-180.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&family=Rubik:wght@600;700&display=swap" />
+<link rel="stylesheet" href="styles.css?v=1" />
+<script src="config.js?v=1"></script>
+<script src="monitor.js?v=1"></script>
+</head>
+<body>
+<div id="app"><div class="loading">טוען…</div></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<noscript><div class="center"><div class="card login">כדי להשתמש במערכת צריך להפעיל JavaScript בדפדפן.</div></div></noscript>
+<script src="supabase.js"></script>
+<script src="logic.js?v=1"></script>
+<script src="app.js?v=1"></script>
+<script>
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  }
+</script>
+</body>
+</html>
