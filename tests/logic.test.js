@@ -1,7 +1,7 @@
 // Run: node --test tests/
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const L = require('../site/logic.js');
+const L = require('../docs/logic.js');
 
 test('normPhone: Israeli mobile in every common format', () => {
   for (const raw of ['050-1234567', '0501234567', '050 123 4567', '+972-50-123-4567', '972501234567', '501234567', '(050)1234567']) {
