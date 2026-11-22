@@ -213,3 +213,21 @@ dialog .btns { margin-top: 16px; justify-content: flex-start; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
 }
+
+/* ישיבות לבדיקה */
+.school-list { display: grid; gap: 12px; }
+@media (min-width: 900px) { .school-list { grid-template-columns: 1fr 1fr; align-items: start; } }
+.school-h { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 4px; }
+.school-ic { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--tint); color: var(--primary); }
+.school-ic svg { width: 22px; height: 22px; }
+.school-notes { white-space: pre-wrap; background: var(--tint); border-radius: 10px; padding: 8px 12px; margin-top: 10px; font-size: 14px; color: var(--soft); }
+.school.done { opacity: .72; }
+.school .btns { margin-top: 12px; }
+.btn .count { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: var(--primary); color: #fff; font-size: 12px; font-weight: 700; }
+.school-link { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 14px 16px; margin: 12px 0; text-decoration: none; color: inherit; transition: background .15s, transform .1s; }
+.school-link:hover { background: var(--tint); }
+.school-link:active { transform: scale(.99); }
+.school-link .grow b { display: block; font-size: 16px; }
+.school-link .muted { display: block; font-size: 13px; }
+.school-link .count { display: inline-grid; place-items: center; min-width: 26px; height: 26px; padding: 0 8px; border-radius: 999px; background: var(--primary); color: #fff; font-size: 13px; font-weight: 700; }
+.school-link .chev svg { width: 20px; height: 20px; color: var(--muted); }

@@ -12,7 +12,7 @@
   var STATUS_LONG = { present: 'נוכח/ת', late: 'איחר/ה', absent: 'חיסר/ה', excused: 'היעדרות מאושרת' };
 
   var $view, $nav, sb;
-  var S = { me: null, email: '', staff: [], groups: [], students: [], att: {}, days: [], templates: [], loadedAt: 0, errors24: 0 };
+  var S = { me: null, email: '', staff: [], groups: [], students: [], att: {}, days: [], templates: [], schools: [], schoolsReady: true, loadedAt: 0, errors24: 0 };
   var ui = { q: '', sent: {}, msg: null };
 
   // ---------- עזרים ----------
@@ -85,6 +85,9 @@
     next: '<path d="m15 18-6-6 6-6"/>',
     out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
     send: '<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>',
+    school: '<path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c3 2 9 2 12 0v-5"/>',
+    mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>',
+    trash: '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/>',
   };
   function icon(name) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[name] + '</svg>'; }
   var LOGO = '<svg viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="11" fill="#0b5d8f"/><path d="M20 7.5l2.1 4.4 4.8.6-3.5 3.3.9 4.8-4.3-2.4-4.3 2.4.9-4.8-3.5-3.3 4.8-.6z" fill="#fff"/><path d="M8 26c3-3 5-3 8 0s5 3 8 0 5-3 8 0" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round"/><path d="M8 32c3-3 5-3 8 0s5 3 8 0 5-3 8 0" stroke="#8cc3e3" stroke-width="2.6" fill="none" stroke-linecap="round"/></svg>';
@@ -168,6 +171,7 @@
   function markNav(path) {
     var top = path === '/' ? '/' : '/' + path.split('/')[1];
     if (top === '/s' || top === '/new' || top === '/edit') top = '/students';
+    if (top === '/schools') top = '/';
     $nav.forEach(function (a) {
       var on = a.getAttribute('data-path') === top;
       a.classList.toggle('on', on);
@@ -190,11 +194,24 @@
     setAttendance(r[3] || []);
     var me = S.staff.filter(function (p) { return p.user_id === S.me.user_id; })[0];
     if (me) { S.me.name = me.name; S.me.role = me.role; }
+    await loadSchools();
     S.loadedAt = Date.now();
     if (isAdmin()) {
       var e = await sb.from('app_errors').select('id', { count: 'exact', head: true }).gte('created_at', new Date(Date.now() - 86400000).toISOString());
       S.errors24 = e.count || 0;
     }
+  }
+  // ישיבות לבדיקה. אם הטבלה עוד לא נוצרה ב-Supabase, שאר המערכת ממשיכה לעבוד כרגיל.
+  async function loadSchools() {
+    var r = await sb.from('schools').select('*').order('created_at', { ascending: false });
+    if (r.error) {
+      S.schools = [];
+      S.schoolsReady = !/schools|relation|does not exist|schema cache/i.test(r.error.message || '');
+      if (S.schoolsReady && window.logIssue) window.logIssue('טעינת ישיבות נכשלה: ' + r.error.message);
+      return;
+    }
+    S.schoolsReady = true;
+    S.schools = r.data || [];
   }
   function setAttendance(rows) {
     S.att = {}; S.attMeta = {};
@@ -232,6 +249,7 @@
         soon();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'groups' }, function () { refresh(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'schools' }, function () { loadSchools().then(soon); })
       .subscribe();
   }
   // לא מציירים מחדש טופס שמישהו באמצע למלא
@@ -269,6 +287,7 @@
       else if (p[1] === 'edit' && p[2]) html = formView(p[2], r.q);
       else if (r.path === '/attendance') html = attendanceView(r.q);
       else if (r.path === '/messages') html = messagesView(r.q);
+      else if (r.path === '/schools') html = schoolsView(r.q);
       else if (r.path === '/settings') { settingsView(); return; }
       else html = '<div class="card empty"><b>העמוד לא נמצא</b><a class="btn" href="#/">לדף הבית</a></div>';
     } catch (e) {
@@ -309,7 +328,7 @@
     if (!S.students.length) {
       return '<div class="page-h"><h1>' + (S.me.name ? 'שלום ' + esc(S.me.name) : 'ברוכים הבאים') + '</h1></div>' +
         '<div class="card empty">' + icon('users') + '<b>עוד אין חניכים במערכת</b><p>מתחילים בהוספת החניך הראשון. אם יש למכינה קבוצות (צוותים, מחזורים), אפשר ליצור אותן קודם בהגדרות.</p>' +
-        '<div class="btns" style="justify-content:center"><a class="btn primary" href="#/new">' + icon('plus') + 'הוספת חניך</a><a class="btn" href="#/settings">יצירת קבוצות</a></div></div>';
+        '<div class="btns" style="justify-content:center"><a class="btn primary" href="#/new">' + icon('plus') + 'הוספת חניך</a><a class="btn" href="#/settings">יצירת קבוצות</a>' + schoolsButton() + '</div></div>';
     }
     var marked = act.filter(function (s) { return (S.att[s.id] || {})[t]; }).length;
     var came = act.filter(function (s) { var m = (S.att[s.id] || {})[t]; return m === 'present' || m === 'late'; }).length;
@@ -351,8 +370,100 @@
       '<div class="kpi"><div class="l">נוכחות השבוע</div><div class="n">' + (wr == null ? '—' : wr + '%') + '</div><div class="s">7 הימים האחרונים</div></div>' +
       '<div class="kpi"><div class="l">ימי הולדת השבוע</div><div class="n">' + bd.length + '</div><div class="s">ב-' + BIRTHDAY_DAYS + ' הימים הקרובים</div></div>' +
       '</div>' +
+      schoolsCard() +
       '<h2 class="sr">מה דורש טיפול</h2><div class="alerts">' + alerts.join('') + '</div>' +
       '<div class="btns"><a class="btn primary" href="#/new">' + icon('plus') + 'הוספת חניך</a><a class="btn" href="#/attendance">' + icon('check') + 'נוכחות</a><a class="btn" href="#/messages">' + icon('msg') + 'הודעה להורים</a></div>';
+  }
+  // כרטיס בולט בדף הבית: ישיבות לבדיקה
+  function schoolsCard() {
+    var todo = S.schools.filter(function (x) { return x.status === 'todo'; }).length;
+    var done = S.schools.length - todo;
+    return '<a class="school-link" href="#/schools"><span class="school-ic">' + icon('school') + '</span>' +
+      '<span class="grow"><b>ישיבות לבדיקה</b><span class="muted">' +
+      (S.schools.length ? todo + ' מחכות לבדיקה' + (done ? ' · ' + done + ' נבדקו' : '') : 'הוספת ישיבה או תיכון עם איש קשר, טלפון ומייל') +
+      '</span></span>' + (todo ? '<span class="count">' + todo + '</span>' : '') + '<span class="chev">' + icon('next') + '</span></a>';
+  }
+  function schoolsButton() {
+    var n = S.schools.filter(function (x) { return x.status === 'todo'; }).length;
+    return '<a class="btn" href="#/schools">' + icon('school') + 'ישיבות לבדיקה' + (n ? ' <span class="count">' + n + '</span>' : '') + '</a>';
+  }
+
+  // ---------- ישיבות / תיכונים לבדיקה ----------
+  function schoolsView(params) {
+    var f = params.get('f') || 'todo';
+    var head = '<div class="page-h"><a class="btn icon" href="#/" aria-label="חזרה לבית">' + icon('back') + '</a><h1>ישיבות לבדיקה</h1><span class="grow"></span>' +
+      (S.schoolsReady ? '<button class="btn primary" data-act="school-edit" data-id="">' + icon('plus') + 'הוספת ישיבה</button>' : '') + '</div>';
+    if (!S.schoolsReady) {
+      return head + '<div class="card empty">' + icon('school') + '<b>צריך להפעיל את הרשימה פעם אחת</b><p>מנהל המערכת צריך להריץ ב-Supabase את הקובץ <span class="ltr">supabase/2026-11-22-schools.sql</span> (SQL Editor ← Run). אחרי זה מרעננים את הדף.</p></div>';
+    }
+    var todo = S.schools.filter(function (x) { return x.status === 'todo'; });
+    var done = S.schools.filter(function (x) { return x.status === 'done'; });
+    var list = f === 'done' ? done : f === 'all' ? S.schools : todo;
+    if (!S.schools.length) {
+      return head + '<div class="card empty">' + icon('school') + '<b>עוד אין ישיבות ברשימה</b><p>מוסיפים ישיבה או תיכון שרוצים לבדוק, עם איש קשר, טלפון ומייל. הכרטיס נשמר לכל הצוות.</p>' +
+        '<div class="btns" style="justify-content:center"><button class="btn primary" data-act="school-edit" data-id="">' + icon('plus') + 'הוספת ישיבה</button></div></div>';
+    }
+    var chips = '<div class="chips" role="navigation" aria-label="סינון">' +
+      chip('לבדיקה (' + todo.length + ')', '#/schools', f === 'todo') +
+      chip('נבדקו (' + done.length + ')', '#/schools?f=done', f === 'done') +
+      chip('הכול (' + S.schools.length + ')', '#/schools?f=all', f === 'all') + '</div>';
+    var cards = list.map(schoolCard).join('');
+    if (!list.length) cards = '<div class="card empty"><b>' + (f === 'done' ? 'עוד לא סומנה אף ישיבה כנבדקה' : 'אין ישיבות שמחכות לבדיקה 👍') + '</b></div>';
+    return head + chips + '<div class="school-list">' + cards + '</div>';
+  }
+  function schoolCard(x) {
+    var p = L.normPhone(x.phone);
+    var waText = 'שלום' + (x.contact_name ? ' ' + x.contact_name : '') + ', כאן צוות מכינת נהריה. ';
+    return '<div class="card school' + (x.status === 'done' ? ' done' : '') + '">' +
+      '<div class="school-h"><span class="school-ic">' + icon('school') + '</span><div class="grow"><b>' + esc(x.name) + '</b> <span class="pill ex">' + esc(x.kind) + '</span>' +
+      (x.status === 'done' ? ' <span class="pill">נבדקה ✓</span>' : '') +
+      (x.contact_name ? '<div class="muted">איש קשר: ' + esc(x.contact_name) + '</div>' : '') + '</div></div>' +
+      (p ? '<div class="contact"><div class="grow"><div class="muted">טלפון</div><span class="ltr">' + esc(p.local) + '</span></div>' +
+        '<a class="btn small" href="' + L.telLink(x.phone) + '">' + icon('phone') + 'חיוג</a>' +
+        '<a class="btn small wa" href="' + esc(L.waLink(x.phone, waText)) + '" target="_blank" rel="noopener">' + icon('msg') + 'וואטסאפ</a>' +
+        '<button class="btn small icon" data-act="copy" data-text="' + esc(p.local) + '" aria-label="העתקת המספר">' + icon('copy') + '</button></div>'
+        : (x.phone ? '<div class="contact"><div class="grow"><div class="muted">טלפון</div><span class="ltr">' + esc(x.phone) + '</span></div></div>' : '')) +
+      (x.email ? '<div class="contact"><div class="grow"><div class="muted">מייל</div><span class="ltr">' + esc(x.email) + '</span></div>' +
+        '<a class="btn small" href="mailto:' + esc(x.email) + '">' + icon('mail') + 'מייל</a>' +
+        '<button class="btn small icon" data-act="copy" data-text="' + esc(x.email) + '" aria-label="העתקת המייל">' + icon('copy') + '</button></div>' : '') +
+      (x.notes ? '<div class="school-notes">' + esc(x.notes) + '</div>' : '') +
+      '<div class="btns">' +
+      '<button class="btn small' + (x.status === 'done' ? '' : ' primary') + '" data-act="school-toggle" data-id="' + x.id + '">' + icon('check') + (x.status === 'done' ? 'להחזיר לבדיקה' : 'סימון כנבדקה') + '</button>' +
+      '<button class="btn small" data-act="school-edit" data-id="' + x.id + '">' + icon('edit') + 'עריכה</button>' +
+      '<button class="btn small danger" data-act="school-delete" data-id="' + x.id + '">' + icon('trash') + 'מחיקה</button></div></div>';
+  }
+  async function editSchool(id) {
+    var x = id ? S.schools.filter(function (s) { return String(s.id) === String(id); })[0] : { name: '', kind: 'ישיבה', contact_name: '', phone: '', email: '', notes: '' };
+    if (!x) return;
+    var v = await dialog('<form><h2>' + (id ? 'עריכת ' + esc(x.name) : 'ישיבה / תיכון לבדיקה') + '</h2>' +
+      '<div class="field"><label for="sc-kind">סוג</label><select id="sc-kind"><option' + (x.kind === 'ישיבה' ? ' selected' : '') + '>ישיבה</option><option' + (x.kind === 'תיכון' ? ' selected' : '') + '>תיכון</option></select></div>' +
+      '<div class="field" style="margin-top:10px"><label for="sc-name">שם הישיבה / התיכון *</label><input id="sc-name" maxlength="100" required value="' + esc(x.name) + '" /></div>' +
+      '<div class="field" style="margin-top:10px"><label for="sc-contact">איש קשר</label><input id="sc-contact" maxlength="80" placeholder="למשל: הרב כהן, רכז" value="' + esc(x.contact_name || '') + '" /></div>' +
+      '<div class="field" style="margin-top:10px"><label for="sc-phone">טלפון</label><input id="sc-phone" type="tel" inputmode="tel" dir="ltr" maxlength="30" value="' + esc(x.phone || '') + '" /></div>' +
+      '<div class="field" style="margin-top:10px"><label for="sc-email">מייל</label><input id="sc-email" type="email" dir="ltr" maxlength="120" value="' + esc(x.email || '') + '" /></div>' +
+      '<div class="field" style="margin-top:10px"><label for="sc-notes">הערות</label><textarea id="sc-notes" maxlength="1000">' + esc(x.notes || '') + '</textarea></div>' +
+      '<div class="btns"><button class="btn primary" type="submit">שמירה</button><button class="btn" type="button" data-v="no">ביטול</button></div></form>',
+      {
+        value: function (d) {
+          return {
+            kind: $('#sc-kind', d).value, name: $('#sc-name', d).value.trim(),
+            contact_name: $('#sc-contact', d).value.trim() || null, phone: $('#sc-phone', d).value.trim() || null,
+            email: $('#sc-email', d).value.trim() || null, notes: $('#sc-notes', d).value.trim() || null,
+          };
+        },
+        focus: function (d) { $('#sc-name', d).focus(); },
+      });
+    if (!v) return;
+    if (!v.name) return toast('צריך לכתוב שם', true);
+    if (v.phone && !L.normPhone(v.phone)) return toast('מספר הטלפון לא תקין. בדקו ונסו שוב.', true);
+    if (v.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email)) return toast('כתובת המייל לא תקינה', true);
+    try {
+      if (id) await q(sb.from('schools').update(v).eq('id', id), 'עדכון ישיבה');
+      else await q(sb.from('schools').insert(Object.assign({ status: 'todo' }, v)), 'הוספת ישיבה');
+      await loadSchools();
+      toast(id ? 'נשמר' : v.kind + ' נוספה לבדיקה');
+      if (route().path === '/schools') render(); else go('#/schools');
+    } catch (e) { toast(friendly(e), true); }
   }
 
   // ---------- רשימת חניכים ----------
@@ -808,6 +919,20 @@
         toast('נמחקה'); render(); return;
       }
       if (act === 'edit-tpl') return editTemplate(id);
+      if (act === 'school-edit') return editSchool(id);
+      if (act === 'school-toggle') {
+        var sc = S.schools.filter(function (x) { return String(x.id) === id; })[0];
+        var nst = sc.status === 'done' ? 'todo' : 'done';
+        await q(sb.from('schools').update({ status: nst }).eq('id', id), 'סימון ישיבה');
+        sc.status = nst; toast(nst === 'done' ? 'סומנה כנבדקה ✓' : 'הוחזרה לבדיקה'); render(); return;
+      }
+      if (act === 'school-delete') {
+        var sc2 = S.schools.filter(function (x) { return String(x.id) === id; })[0];
+        if (!(await confirmBox('למחוק את ' + sc2.name + '?', 'הכרטיס יימחק מהרשימה של כל הצוות.', 'מחיקה', true))) return;
+        await q(sb.from('schools').delete().eq('id', id), 'מחיקת ישיבה');
+        S.schools = S.schools.filter(function (x) { return x !== sc2; });
+        toast('נמחקה'); render(); return;
+      }
       if (act === 'delete-tpl') {
         var t = S.templates.filter(function (x) { return String(x.id) === id; })[0];
         if (!(await confirmBox('למחוק את התבנית "' + t.title + '"?', 'אפשר ליצור אותה שוב בכל רגע.', 'מחיקה', true))) return;
