@@ -108,6 +108,18 @@
       document.body.appendChild(d);
       var done = false;
       function close(v) { if (done) return; done = true; d.close(); d.remove(); resolve(v); }
+      // onOpen.check(v) מחזיר { msg, field } כשיש טעות → החלון נשאר פתוח ושום דבר לא נמחק
+      function finish() {
+        var v = onOpen ? onOpen.value(d) : true;
+        var err = onOpen && onOpen.check ? onOpen.check(v) : null;
+        if (!err) return close(v);
+        $$('[aria-invalid]', d).forEach(function (i) { i.removeAttribute('aria-invalid'); });
+        var box = $('.dlg-err', d);
+        if (!box) { box = document.createElement('div'); box.className = 'err dlg-err'; box.setAttribute('role', 'alert'); var btns = $('.btns', d); btns.parentNode.insertBefore(box, btns); }
+        box.textContent = err.msg;
+        var f = err.field && $('#' + err.field, d);
+        if (f) { f.setAttribute('aria-invalid', 'true'); f.focus(); }
+      }
       d.addEventListener('cancel', function (e) { e.preventDefault(); close(null); });
       d.addEventListener('click', function (e) {
         if (e.target === d) {  // לחיצה על הרקע הכהה מחוץ לחלון בלבד
@@ -116,9 +128,9 @@
           return;
         }
         var b = e.target.closest('[data-v]');
-        if (b) { e.preventDefault(); close(b.getAttribute('data-v') === 'ok' ? (onOpen ? onOpen.value(d) : true) : null); }
+        if (b) { e.preventDefault(); if (b.getAttribute('data-v') === 'ok') finish(); else close(null); }
       });
-      d.addEventListener('submit', function (e) { e.preventDefault(); close(onOpen ? onOpen.value(d) : true); });
+      d.addEventListener('submit', function (e) { e.preventDefault(); finish(); });
       d.showModal();
       if (onOpen && onOpen.focus) onOpen.focus(d);
     });
@@ -451,6 +463,12 @@
             email: $('#sc-email', d).value.trim() || null, notes: $('#sc-notes', d).value.trim() || null,
           };
         },
+        check: function (v) {
+          if (!v.name) return { msg: 'צריך לכתוב שם', field: 'sc-name' };
+          if (v.phone && !L.normPhone(v.phone)) return { msg: 'מספר הטלפון לא תקין. בדקו ונסו שוב.', field: 'sc-phone' };
+          if (v.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email)) return { msg: 'כתובת המייל לא תקינה', field: 'sc-email' };
+          return null;
+        },
         focus: function (d) { $('#sc-name', d).focus(); },
       });
     if (!v) return;
@@ -478,7 +496,13 @@
       return true;
     }).sort(byName);
   }
-  function chip(label, href, on) { return '<a class="chip' + (on ? ' on' : '') + '" href="' + href + '"' + (on ? ' aria-current="true"' : '') + '>' + esc(label) + '</a>'; }
+  // ערך g מהכתובת: רק 'none' או מזהה של קבוצה קיימת — כל דבר אחר נזרק (הגנה מהזרקת קוד דרך קישור)
+  function safeGroup(params) {
+    var g = params.get('g');
+    if (g === 'none') return g;
+    return g && S.groups.some(function (x) { return String(x.id) === g; }) ? g : null;
+  }
+  function chip(label, href, on) { return '<a class="chip' + (on ? ' on' : '') + '" href="' + esc(href) + '"' + (on ? ' aria-current="true"' : '') + '>' + esc(label) + '</a>'; }
   function groupChips(base, params, extra) {
     var g = params.get('g'), f = params.get('f');
     var hasNone = S.students.some(function (s) { return s.active && !s.group_id; }) && S.groups.length;
@@ -642,7 +666,7 @@
   function attendanceView(params) {
     var t = today(), day = params.get('d') || t;
     if (!L.parseDay(day)) day = t;
-    var g = params.get('g');
+    var g = safeGroup(params);
     var list = active().filter(function (s) { return g === 'none' ? !s.group_id : g ? String(s.group_id) === g : true; });
     var cnt = { present: 0, late: 0, absent: 0, excused: 0, none: 0 };
     list.forEach(function (s) { var m = (S.att[s.id] || {})[day]; cnt[m || 'none']++; });
@@ -659,10 +683,10 @@
         '</div></div>';
     }).join('');
     return '<div class="page-h"><h1>נוכחות</h1><span class="muted">יום ' + L.weekday(day) + ' ' + L.fmtDay(day) + (day === t ? ' · היום' : '') + '</span></div>' +
-      '<div class="att-head"><a class="btn icon" href="' + qs(L.shiftDay(day, -1), g) + '" aria-label="יום קודם">' + icon('prev') + '</a>' +
+      '<div class="att-head"><a class="btn icon" href="' + esc(qs(L.shiftDay(day, -1), g)) + '" aria-label="יום קודם">' + icon('prev') + '</a>' +
       '<label class="sr" for="att-day">תאריך</label><input type="date" id="att-day" value="' + day + '" max="' + t + '" />' +
-      '<a class="btn icon" href="' + qs(L.shiftDay(day, 1), g) + '" aria-label="יום הבא"' + (day >= t ? ' style="visibility:hidden"' : '') + '>' + icon('next') + '</a>' +
-      (day !== t ? '<a class="btn" href="' + qs(t, g) + '">להיום</a>' : '') + '</div>' +
+      '<a class="btn icon" href="' + esc(qs(L.shiftDay(day, 1), g)) + '" aria-label="יום הבא"' + (day >= t ? ' style="visibility:hidden"' : '') + '>' + icon('next') + '</a>' +
+      (day !== t ? '<a class="btn" href="' + esc(qs(t, g)) + '">להיום</a>' : '') + '</div>' +
       chips +
       (list.length ? '<div class="att-sum"><span class="pill ok">נוכחים ' + cnt.present + '</span><span class="pill warn">איחור ' + cnt.late + '</span><span class="pill bad">חיסור ' + cnt.absent + '</span><span class="pill ex">מאושר ' + cnt.excused + '</span>' + (cnt.none ? '<span class="pill">לא סומנו ' + cnt.none + '</span>' : '') + '</div>' +
         (cnt.none ? '<div class="btns" style="margin-bottom:12px"><button class="btn primary" data-act="mark-rest" data-day="' + day + '" data-g="' + esc(g || '') + '">' + icon('check') + 'לסמן את כל ' + cnt.none + ' הנותרים כנוכחים</button></div>' : '<div class="muted" style="margin-bottom:12px">כולם סומנו ✓ · לחיצה על סימון קיים מבטלת אותו</div>') +
@@ -727,7 +751,7 @@
     var st = ui.msg = ui.msg || { audience: 'parents', tplId: null, body: null };
     var only = params.get('s') ? S.students.filter(function (s) { return s.id === params.get('s'); })[0] : null;
     if (params.get('a')) st.audience = params.get('a') === 'students' ? 'students' : 'parents';
-    var g = params.get('g');
+    var g = safeGroup(params);
     var tpls = S.templates.filter(function (t) { return t.audience === st.audience; });
     if (!tpls.some(function (t) { return t.id === st.tplId; })) { st.tplId = tpls[0] ? tpls[0].id : null; st.body = null; }
     var cur = tpls.filter(function (t) { return t.id === st.tplId; })[0];
@@ -833,7 +857,9 @@
       '<div class="field" style="margin-top:10px"><label for="t-body">ההודעה</label><textarea id="t-body" maxlength="1000" required>' + esc(t.body) + '</textarea></div>' +
       '<div class="muted">אפשר להשתמש ב: {חניך} {הורה} {שם_מלא} {תאריך}</div>' +
       '<div class="btns"><button class="btn primary" type="submit">שמירה</button><button class="btn" type="button" data-v="no">ביטול</button></div></form>',
-      { value: function (d) { return { title: $('#t-title', d).value.trim(), audience: $('#t-aud', d).value, body: $('#t-body', d).value.trim() }; }, focus: function (d) { $('#t-title', d).focus(); } });
+      { value: function (d) { return { title: $('#t-title', d).value.trim(), audience: $('#t-aud', d).value, body: $('#t-body', d).value.trim() }; },
+        check: function (v) { return !v.title ? { msg: 'צריך לכתוב שם לתבנית', field: 't-title' } : !v.body ? { msg: 'צריך לכתוב את ההודעה', field: 't-body' } : null; },
+        focus: function (d) { $('#t-title', d).focus(); } });
     if (!v) return;
     if (!v.title || !v.body) return toast('צריך שם וגם תוכן', true);
     try {

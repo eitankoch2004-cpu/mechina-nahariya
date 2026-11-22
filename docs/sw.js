@@ -1,7 +1,7 @@
 /* Service worker — רק כדי שהמערכת תיפתח מהר ותהיה ניתנת להתקנה.
    תמיד מנסה קודם את הרשת (כדי שלא תיתקעו עם גרסה ישנה), ורק בלי אינטרנט מגיש מהעותק השמור.
    נתונים (Supabase) לא נשמרים כאן לעולם — רק קבצי המערכת עצמה. */
-var CACHE = 'mechina-v2';
+var CACHE = 'mechina-v3';
 
 self.addEventListener('install', function () { self.skipWaiting(); });
 self.addEventListener('activate', function (e) {
